@@ -3,7 +3,18 @@ import os
 import sqlite3
 from contextlib import contextmanager
 
-DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
+def _database_url() -> str | None:
+    for key in ("DATABASE_URL", "POSTGRES_URL"):
+        if os.getenv(key):
+            return os.getenv(key)
+    # Vercel's "Connect Project" dialog can add a prefix, e.g. STORAGE_DATABASE_URL
+    for key, val in sorted(os.environ.items()):
+        if key.endswith(("_DATABASE_URL", "_POSTGRES_URL")) and val.startswith(("postgres://", "postgresql://")):
+            return val
+    return None
+
+
+DATABASE_URL = _database_url()
 IS_PG = bool(DATABASE_URL)
 # Vercel's filesystem is read-only except /tmp, and /tmp doesn't survive between instances.
 DB_PATH = os.getenv("KHATA_DB") or ("/tmp/khata.db" if os.getenv("VERCEL")
