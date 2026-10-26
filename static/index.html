@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kirana Khata</title>
+<style>
+  :root { --bg:#f6f3ee; --card:#fff; --ink:#1f1d1a; --muted:#6f6a62; --line:#e4ded4;
+          --brand:#b4461e; --brand-ink:#fff; --good:#2f7d4a; --bad:#b3261e; --chip:#f1ebe2; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161412; --card:#211e1b; --ink:#f1ece4; --muted:#a8a095; --line:#36312b;
+            --brand:#e0703f; --brand-ink:#1a0f0a; --good:#6cc28a; --bad:#f08a80; --chip:#2b2723; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 system-ui, "Noto Sans", sans-serif; }
+  header { padding:16px; display:flex; justify-content:space-between; align-items:baseline; }
+  header h1 { margin:0; font-size:20px; } header small { color:var(--muted); }
+  main { padding:0 16px 96px; max-width:720px; margin:0 auto; }
+  nav { position:fixed; bottom:0; left:0; right:0; display:flex; background:var(--card); border-top:1px solid var(--line); }
+  nav button { flex:1; padding:12px 4px; border:0; background:none; color:var(--muted); font:inherit; font-size:14px; }
+  nav button.on { color:var(--brand); font-weight:600; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin:12px 0; }
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; }
+  .stat b { display:block; font-size:18px; } .stat span { font-size:12px; color:var(--muted); }
+  .mic { width:120px; height:120px; border-radius:50%; border:0; background:var(--brand); color:var(--brand-ink);
+         font-size:15px; font-weight:600; display:block; margin:24px auto 8px; cursor:pointer; }
+  .mic.rec { animation:pulse 1s infinite; } @keyframes pulse { 50% { transform:scale(1.06); opacity:.85; } }
+  .hint { text-align:center; color:var(--muted); font-size:14px; margin:0 0 8px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  input, select, textarea { font:inherit; color:var(--ink); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px; min-width:0; }
+  textarea { width:100%; }
+  button.b { font:inherit; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:8px 12px; cursor:pointer; }
+  button.p { background:var(--brand); color:var(--brand-ink); border-color:var(--brand); }
+  .entry { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .entry:last-child { border:0; } .entry .src { grid-column:1/-1; font-size:12px; color:var(--muted); }
+  .chip { display:inline-block; background:var(--chip); border-radius:99px; padding:2px 8px; font-size:12px; }
+  .udhaar { color:var(--bad); } .payment, .paid { color:var(--good); }
+  .list > div { display:flex; justify-content:space-between; gap:8px; padding:10px 0; border-bottom:1px solid var(--line); align-items:center; }
+  .list > div:last-child { border:0; }
+  .muted { color:var(--muted); font-size:13px; } .err { color:var(--bad); }
+  table { width:100%; border-collapse:collapse; font-size:13px; } td, th { text-align:left; padding:4px; border-bottom:1px solid var(--line); }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<header><h1>📒 Kirana Khata</h1><small id="shop"></small></header>
+<main>
+  <div class="stats">
+    <div class="stat"><b id="sRecv">₹0</b><span>Udhaar baaki (<i id="sDebt">0</i>)</span></div>
+    <div class="stat"><b id="sToday">₹0</b><span>Aaj jama</span></div>
+    <div class="stat"><b id="sPay">₹0</b><span>Supplier dena (<i id="sBills">0</i>)</span></div>
+  </div>
+
+  <section id="t-bolo">
+    <button class="mic" id="mic">🎙️ Bolo</button>
+    <p class="hint" id="micHint">Tap karke boliye: "Ramesh ko 2 kilo atta aur 1 litre tel udhaar"</p>
+    <div class="card">
+      <div class="row"><input id="txt" style="flex:1" placeholder="…ya yahan likhiye"><button class="b" id="parseBtn">Samjho</button></div>
+      <p class="muted" id="audioFallback" hidden>Mic is page pe band hai (HTTPS chahiye). Recording upload karein:
+        <input type="file" accept="audio/*" capture id="audioFile"></p>
+    </div>
+    <div class="card" id="review" hidden>
+      <div class="muted">Suna: <q id="heard"></q></div>
+      <div id="unclear" class="err"></div>
+      <div id="entries"></div>
+      <div class="row" style="margin-top:8px"><button class="b p" id="saveBtn">✓ Khate mein likho</button><button class="b" id="cancelBtn">Cancel</button></div>
+    </div>
+    <p id="status" class="hint"></p>
+  </section>
+
+  <section id="t-khata" hidden>
+    <div class="card list" id="custList"></div>
+    <div class="card" id="custDetail" hidden></div>
+  </section>
+
+  <section id="t-bills" hidden>
+    <div class="card">
+      <b>Supplier bill ki photo</b>
+      <p class="muted">Sarvam Vision bill padhkar supplier, total, GST aur items nikalta hai.</p>
+      <input type="file" accept="image/*,application/pdf" capture="environment" id="billFile">
+      <p id="billStatus" class="muted"></p>
+    </div>
+    <div id="billList"></div>
+  </section>
+
+  <section id="t-remind" hidden>
+    <div class="card">
+      <b>Samvaad call campaign</b>
+      <p class="muted">Jin customers ka phone number hai aur udhaar baaki hai, unki list. Samvaad dashboard → Deploy → Campaigns mein upload karein.</p>
+      <div class="row"><a class="b p" href="/api/campaign.csv" style="text-decoration:none">⬇ Campaign CSV</a>
+        <select id="lang"><option value="hi-IN">Hindi</option><option value="en-IN">English</option></select></div>
+    </div>
+    <div class="card list" id="dueList"></div>
+    <div class="card"><b>Call results</b><div class="list" id="callList"></div></div>
+  </section>
+</main>
+<nav>
+  <button data-t="bolo" class="on">🎙️ Bolo</button><button data-t="khata">📒 Khata</button>
+  <button data-t="bills">🧾 Bills</button><button data-t="remind">📞 Yaad dilao</button>
+</nav>
+
+<script>
+const $ = s => document.querySelector(s);
+const rs = n => "₹" + Number(n || 0).toLocaleString("en-IN", {maximumFractionDigits: 2});
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function api(path, opts = {}) {
+  const r = await fetch(path, opts);
+  const body = r.headers.get("content-type")?.includes("json") ? await r.json() : await r.text();
+  if (!r.ok) throw new Error(body.detail ? (typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail)) : body);
+  return body;
+}
+const jsonOpts = (method, data) => ({method, headers: {"Content-Type": "application/json"}, body: JSON.stringify(data)});
+
+// --- tabs ---
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x === b));
+  document.querySelectorAll("main section").forEach(s => s.hidden = s.id !== "t-" + b.dataset.t);
+  ({khata: loadCustomers, bills: loadBills, remind: loadRemind})[b.dataset.t]?.();
+});
+
+async function loadSummary() {
+  const s = await api("/api/summary");
+  $("#shop").textContent = s.shop; $("#sRecv").textContent = rs(s.receivable); $("#sDebt").textContent = s.debtors;
+  $("#sToday").textContent = rs(s.collected_today); $("#sPay").textContent = rs(s.payable); $("#sBills").textContent = s.unpaid_bills;
+}
+
+// --- voice entry ---
+let rec, chunks = [], pending = null, stopTimer;
+const status = (m, err) => { $("#status").textContent = m; $("#status").className = "hint" + (err ? " err" : ""); };
+if (!navigator.mediaDevices?.getUserMedia) { $("#audioFallback").hidden = false; $("#mic").disabled = true; }
+
+$("#mic").onclick = async () => {
+  if (rec?.state === "recording") return rec.stop();
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    rec = new MediaRecorder(stream); chunks = [];
+    rec.ondataavailable = e => chunks.push(e.data);
+    rec.onstop = () => {
+      clearTimeout(stopTimer); stream.getTracks().forEach(t => t.stop());
+      $("#mic").classList.remove("rec"); $("#mic").textContent = "🎙️ Bolo";
+      sendAudio(new Blob(chunks, {type: rec.mimeType}), "note." + (rec.mimeType.includes("mp4") ? "mp4" : "webm"));
+    };
+    rec.start(); $("#mic").classList.add("rec"); $("#mic").textContent = "⏹ Ruko";
+    stopTimer = setTimeout(() => rec.state === "recording" && rec.stop(), 28000); // REST STT limit is 30s
+    status("Sun raha hoon…");
+  } catch (e) { status("Mic nahi mila: " + e.message, true); $("#audioFallback").hidden = false; }
+};
+$("#audioFile").onchange = e => e.target.files[0] && sendAudio(e.target.files[0], e.target.files[0].name);
+
+async function sendAudio(blob, name) {
+  status("Saaras sun raha hai, Sarvam-105B samajh raha hai…");
+  const fd = new FormData(); fd.append("audio", blob, name);
+  try { showReview(await api("/api/voice", {method: "POST", body: fd})); }
+  catch (e) { status(e.message, true); }
+}
+$("#parseBtn").onclick = async () => {
+  const text = $("#txt").value.trim(); if (!text) return;
+  status("Samajh raha hoon…");
+  try { showReview(await api("/api/parse", jsonOpts("POST", {text}))); } catch (e) { status(e.message, true); }
+};
+$("#txt").onkeydown = e => e.key === "Enter" && $("#parseBtn").click();
+
+function showReview(res) {
+  pending = res; status("");
+  $("#heard").textContent = res.transcript || "—";
+  $("#unclear").textContent = res.unclear ? "⚠ " + res.unclear : "";
+  $("#entries").innerHTML = res.entries.length ? res.entries.map((e, i) => `
+    <div class="entry" data-i="${i}">
+      <input data-k="customer" value="${esc(e.customer)}" aria-label="Customer">
+      <select data-k="kind"><option value="udhaar" ${e.kind === "udhaar" ? "selected" : ""}>Udhaar (liya)</option>
+        <option value="payment" ${e.kind === "payment" ? "selected" : ""}>Jama (diya)</option></select>
+      <input data-k="item" value="${esc(e.item || "")}" placeholder="item">
+      <input data-k="amount" type="number" step="0.01" value="${e.amount ?? ""}" placeholder="₹ amount?" ${e.amount == null ? 'style="border-color:var(--bad)"' : ""}>
+      <div class="src">${e.qty != null ? esc(e.qty + " " + (e.unit || "")) + " · " : ""}amount: ${esc(e.amount_source)}</div>
+    </div>`).join("") : '<p class="muted">Koi entry nahi mili.</p>';
+  $("#review").hidden = false;
+}
+$("#cancelBtn").onclick = () => { $("#review").hidden = true; pending = null; };
+$("#saveBtn").onclick = async () => {
+  const entries = [...document.querySelectorAll("#entries .entry")].map(div => {
+    const e = {...pending.entries[div.dataset.i]};
+    div.querySelectorAll("[data-k]").forEach(f => e[f.dataset.k] = f.value.trim());
+    e.amount = parseFloat(e.amount); e.item = e.item || null;
+    return e;
+  });
+  if (entries.some(e => !(e.amount > 0) || !e.customer)) return status("Har entry mein naam aur amount bharo.", true);
+  try {
+    await api("/api/entries", jsonOpts("POST", {entries, transcript: pending.transcript}));
+    $("#review").hidden = true; $("#txt").value = ""; status(`✓ ${entries.length} entry khate mein likhi`);
+    loadSummary();
+  } catch (e) { status(e.message, true); }
+};
+
+// --- khata ---
+async function loadCustomers() {
+  const cs = await api("/api/customers");
+  $("#custList").innerHTML = cs.length ? cs.map(c => `<div>
+      <div><b>${esc(c.name)}</b><div class="muted">${esc(c.phone || "no phone")}</div></div>
+      <div class="row"><b class="${c.balance > 0 ? "udhaar" : "paid"}">${rs(c.balance)}</b>
+      <button class="b" onclick="openCustomer(${c.id})">›</button></div></div>`).join("")
+    : '<p class="muted">Abhi khata khaali hai. Bolo tab se entry kijiye.</p>';
+}
+async function openCustomer(id) {
+  const [cs, es] = await Promise.all([api("/api/customers"), api(`/api/customers/${id}/entries`)]);
+  const c = cs.find(x => x.id === id);
+  $("#custDetail").hidden = false;
+  $("#custDetail").innerHTML = `<div class="row" style="justify-content:space-between"><b>${esc(c.name)}</b><b class="${c.balance > 0 ? "udhaar" : "paid"}">${rs(c.balance)}</b></div>
+    <div class="row" style="margin:8px 0"><input id="ph" value="${esc(c.phone || "")}" placeholder="10-digit mobile" inputmode="tel" style="flex:1">
+    <button class="b" onclick="savePhone(${id})">Save phone</button></div>
+    <table><tr><th>Date</th><th>Item</th><th>₹</th><th></th></tr>${es.map(e => `<tr>
+      <td>${esc(e.created_at.slice(5, 16))}</td><td>${e.kind === "payment" ? "Jama" : esc([e.qty, e.unit, e.item].filter(x => x != null).join(" "))}</td>
+      <td class="${e.kind}">${e.kind === "payment" ? "−" : "+"}${rs(e.amount)}</td>
+      <td><button class="b" title="Delete" onclick="delEntry(${e.id}, ${id})">✕</button></td></tr>`).join("")}</table>`;
+  $("#custDetail").scrollIntoView({behavior: "smooth"});
+}
+async function savePhone(id) { await api(`/api/customers/${id}`, jsonOpts("PATCH", {phone: $("#ph").value.trim()})); loadCustomers(); }
+async function delEntry(eid, cid) { if (confirm("Entry delete karein?")) { await api(`/api/entries/${eid}`, {method: "DELETE"}); openCustomer(cid); loadCustomers(); loadSummary(); } }
+
+// --- bills ---
+$("#billFile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $("#billStatus").textContent = "Sarvam Vision bill padh raha hai (20–60s)…";
+  const fd = new FormData(); fd.append("file", f);
+  try { const r = await api("/api/bills", {method: "POST", body: fd}); $("#billStatus").textContent = `✓ ${r.extracted.supplier_name || "Bill"} — ${rs(r.extracted.total_amount)}`; loadBills(); loadSummary(); }
+  catch (err) { $("#billStatus").innerHTML = `<span class="err">${esc(err.message)}</span>`; }
+  e.target.value = "";
+};
+async function loadBills() {
+  const bs = await api("/api/bills");
+  $("#billList").innerHTML = bs.map(b => `<div class="card">
+    <div class="row" style="justify-content:space-between"><b>${esc(b.supplier || "Unknown supplier")}</b>
+      <span class="chip ${b.status === "paid" ? "paid" : "udhaar"}">${b.status}</span></div>
+    <div class="muted">Bill ${esc(b.bill_no || "—")} · ${esc(b.bill_date || "")} · GST ${rs(b.gst)}</div>
+    <div class="row" style="justify-content:space-between;margin-top:6px"><b>${rs(b.total)}</b>
+      <button class="b" onclick="toggleBill(${b.id}, '${b.status === "paid" ? "unpaid" : "paid"}')">${b.status === "paid" ? "Mark unpaid" : "✓ Mark paid"}</button></div>
+    ${b.line_items.length ? `<details><summary class="muted">${b.line_items.length} items</summary><table>${b.line_items.map(li =>
+      `<tr><td>${esc(li.item)}</td><td>${esc(li.quantity ?? "")} ${esc(li.unit ?? "")}</td><td>${rs(li.amount)}</td></tr>`).join("")}</table></details>` : ""}
+  </div>`).join("");
+}
+async function toggleBill(id, status) { await api(`/api/bills/${id}`, jsonOpts("PATCH", {status})); loadBills(); loadSummary(); }
+
+// --- reminders ---
+async function loadRemind() {
+  const cs = (await api("/api/customers")).filter(c => c.balance > 0);
+  $("#dueList").innerHTML = cs.length ? cs.map(c => `<div>
+    <div><b>${esc(c.name)}</b> <span class="udhaar">${rs(c.balance)}</span><div class="muted">${esc(c.phone || "⚠ phone nahi — Khata tab mein jodiye")}</div></div>
+    <button class="b" onclick="preview(${c.id}, this)">▶ Sunao</button></div>`).join("") : '<p class="muted">Kisi ka udhaar baaki nahi 🎉</p>';
+  const calls = await api("/api/calls");
+  $("#callList").innerHTML = calls.length ? calls.map(c => `<div><div><b>${esc(c.name || c.phone)}</b>
+    <div class="muted">${esc(c.created_at)} · ${esc(c.status || "")}</div></div><span class="muted">${esc(c.outcome)}</span></div>`).join("")
+    : '<p class="muted">Campaign webhook se call results yahan aayenge.</p>';
+}
+async function preview(id, btn) {
+  btn.disabled = true; btn.textContent = "…";
+  try {
+    const r = await api(`/api/reminders/${id}?lang=${$("#lang").value}`);
+    new Audio("data:audio/wav;base64," + r.audio_b64).play(); btn.title = r.text;
+  } catch (e) { alert(e.message); }
+  btn.disabled = false; btn.textContent = "▶ Sunao";
+}
+
+loadSummary().catch(e => status(e.message, true));
+</script>
+</body>
+</html>
