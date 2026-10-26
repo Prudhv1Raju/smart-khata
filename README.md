@@ -1,4 +1,6 @@
-# Kirana Khata — voice-first udhaar ledger on Sarvam
+# Bolo Khata — bolo, aur khata likh jaaye
+
+A voice-first udhaar ledger for kirana stores, built on Sarvam AI.
 
 A shopkeeper speaks a ledger note in Hinglish — *"Ramesh ko 2 kilo atta aur ek packet chai patti udhaar, Suresh ne 500 jama kiye"* — and it becomes ledger entries. Supplier bills are read from a photo. Customers who owe money get a polite reminder call.
 

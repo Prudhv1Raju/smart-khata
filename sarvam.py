@@ -1,4 +1,4 @@
-"""Thin async client for the Sarvam APIs Kirana Khata uses."""
+"""Thin async client for the Sarvam APIs Bolo Khata uses."""
 import asyncio
 import base64
 import json

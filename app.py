@@ -1,4 +1,4 @@
-"""Kirana Khata: voice-first credit ledger + supplier bills + dues reminders on Sarvam."""
+"""Bolo Khata: voice-first credit ledger + supplier bills + dues reminders on Sarvam."""
 import base64
 import csv
 import difflib
@@ -32,7 +32,7 @@ import sarvam  # noqa: E402
 
 SHOP_NAME = os.getenv("SHOP_NAME", "Sharma Kirana Store")
 
-app = FastAPI(title="Kirana Khata")
+app = FastAPI(title="Bolo Khata")
 db.init()
 
 
