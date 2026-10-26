@@ -101,3 +101,19 @@ def test_missing_key_is_clear_error():
     khata.sarvam.chat_json = _real_chat_json
     r = client.post("/api/parse", json={"text": "Ramesh ko atta"})
     assert r.status_code == 502 and "SARVAM_API_KEY" in r.json()["detail"]
+
+
+def test_password_gate():
+    import base64
+    khata.APP_PASSWORD, khata.WEBHOOK_TOKEN = "secret", "hooktok"
+    try:
+        r = client.get("/api/summary")
+        assert r.status_code == 401 and r.headers["www-authenticate"].startswith("Basic")
+        bad = base64.b64encode(b"x:wrong").decode()
+        assert client.get("/api/summary", headers={"Authorization": f"Basic {bad}"}).status_code == 401
+        good = base64.b64encode(b"anyone:secret").decode()
+        assert client.get("/api/summary", headers={"Authorization": f"Basic {good}"}).status_code == 200
+        assert client.post("/api/webhooks/samvaad", json={}).status_code == 401
+        assert client.post("/api/webhooks/samvaad?token=hooktok", json={"user_phone_number": ""}).status_code == 200
+    finally:
+        khata.APP_PASSWORD = khata.WEBHOOK_TOKEN = ""

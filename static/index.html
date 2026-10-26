@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bolo Khata</title>
+<title>Smart Khata</title>
 <style>
   :root { --bg:#f6f3ee; --card:#fff; --ink:#1f1d1a; --muted:#6f6a62; --line:#e4ded4;
           --brand:#b4461e; --brand-ink:#fff; --good:#2f7d4a; --bad:#b3261e; --chip:#f1ebe2; }
@@ -44,8 +44,9 @@
 </style>
 </head>
 <body>
-<header><h1>🎙️ Bolo Khata</h1><small id="shop"></small></header>
+<header><h1>📒 Smart Khata</h1><small id="shop"></small></header>
 <main>
+  <p class="card err" id="storageWarn" hidden>⚠ Database connected nahi hai — data thodi der mein mit jayega. Vercel → Storage → Neon Postgres jodiye.</p>
   <div class="stats">
     <div class="stat"><b id="sRecv">₹0</b><span>Udhaar baaki (<i id="sDebt">0</i>)</span></div>
     <div class="stat"><b id="sToday">₹0</b><span>Aaj jama</span></div>
@@ -123,6 +124,7 @@ async function loadSummary() {
   const s = await api("/api/summary");
   $("#shop").textContent = s.shop; $("#sRecv").textContent = rs(s.receivable); $("#sDebt").textContent = s.debtors;
   $("#sToday").textContent = rs(s.collected_today); $("#sPay").textContent = rs(s.payable); $("#sBills").textContent = s.unpaid_bills;
+  $("#storageWarn").hidden = s.storage !== "sqlite-ephemeral";
 }
 
 // --- voice entry ---
@@ -218,10 +220,20 @@ async function savePhone(id) { await api(`/api/customers/${id}`, jsonOpts("PATCH
 async function delEntry(eid, cid) { if (confirm("Entry delete karein?")) { await api(`/api/entries/${eid}`, {method: "DELETE"}); openCustomer(cid); loadCustomers(); loadSummary(); } }
 
 // --- bills ---
+// Phone photos are often 5–10 MB; Vercel functions accept at most 4.5 MB per request.
+async function shrinkImage(f, maxSide = 2000) {
+  if (!f.type.startsWith("image/") || f.size < 1.5e6) return [f, f.name];
+  const img = await createImageBitmap(f);
+  const k = Math.min(1, maxSide / Math.max(img.width, img.height));
+  const cv = Object.assign(document.createElement("canvas"), {width: Math.round(img.width * k), height: Math.round(img.height * k)});
+  cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+  const blob = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.85));
+  return [blob, "bill.jpg"];
+}
 $("#billFile").onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   $("#billStatus").textContent = "Sarvam Vision bill padh raha hai (20–60s)…";
-  const fd = new FormData(); fd.append("file", f);
+  const fd = new FormData(); fd.append("file", ...(await shrinkImage(f)));
   try { const r = await api("/api/bills", {method: "POST", body: fd}); $("#billStatus").textContent = `✓ ${r.extracted.supplier_name || "Bill"} — ${rs(r.extracted.total_amount)}`; loadBills(); loadSummary(); }
   catch (err) { $("#billStatus").innerHTML = `<span class="err">${esc(err.message)}</span>`; }
   e.target.value = "";

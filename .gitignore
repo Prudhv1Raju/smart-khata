@@ -1,3 +1,4 @@
 khata.db
 .env
 __pycache__/
+.vercel

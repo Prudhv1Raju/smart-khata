@@ -1,4 +1,4 @@
-# Bolo Khata — bolo, aur khata likh jaaye
+# Smart Khata — bolo, aur khata likh jaaye
 
 A voice-first udhaar ledger for kirana stores, built on Sarvam AI.
 
@@ -26,6 +26,23 @@ Open http://localhost:8000. The mic needs `localhost` or HTTPS. To use it from a
 
 Tests (Sarvam calls are faked): `python -m pytest -q`
 
+## Deploy on Vercel
+
+The repo is ready for Vercel as-is: `app.py` is detected as a FastAPI app, and `vercel.json` sets a 120s timeout for bill extraction.
+
+1. Go to https://vercel.com/signup and **Continue with GitHub**. The free Hobby plan is enough.
+2. **Add New… → Project**, then import `smart-khata`. If it isn't listed, choose **Adjust GitHub App Permissions** and give Vercel access to the repo.
+3. Before clicking Deploy, open **Environment Variables** and add:
+   | Name | Value |
+   |---|---|
+   | `SARVAM_API_KEY` | your Sarvam key |
+   | `APP_PASSWORD` | a password; the browser asks for it (any username) |
+   | `SHOP_NAME` | your shop's name |
+4. Click **Deploy**.
+5. **Database (so the ledger persists):** in the project, go to **Storage → Create Database → Neon (Postgres)** → connect it to the project. This sets `DATABASE_URL`. Then **Deployments → ⋯ → Redeploy**. Until you do this, the app shows a red warning because data is kept in temporary storage.
+
+On the deployed HTTPS URL, the phone mic works directly. For Samvaad, set the campaign webhook to `https://<your-app>.vercel.app/api/webhooks/samvaad?token=<APP_PASSWORD>`.
+
 ## Set up the reminder calls (Samvaad)
 
 Campaigns are created from the Sarvam dashboard; there's no campaign-creation API.
@@ -35,7 +52,7 @@ Campaigns are created from the Sarvam dashboard; there's no campaign-creation AP
 2. **Phones:** in the app's **Khata** tab, add a 10-digit phone for each customer.
 3. **CSV:** in **Yaad dilao**, download the **Campaign CSV**. Columns: `phone_number` (E.164), `customer_name`, `amount_due`, `shop_name`, `last_activity`.
 4. **Campaign:** Deploy → Campaigns → upload the CSV and map the agent fields to its columns. Set the calling window (e.g. 10:00–19:00) and retries.
-5. **Webhook (optional):** under Advanced, set the webhook to `https://<your-tunnel>/api/webhooks/samvaad`. Call outcomes (`output_agent_variables`, transcript) then show up under **Call results**.
+5. **Webhook (optional):** under Advanced, set the webhook to `https://<your-app>/api/webhooks/samvaad?token=<APP_PASSWORD>`. Call outcomes (`output_agent_variables`, transcript) then show up under **Call results**.
 
 ## Files
 

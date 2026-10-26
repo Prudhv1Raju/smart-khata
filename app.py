@@ -1,4 +1,4 @@
-"""Bolo Khata: voice-first credit ledger + supplier bills + dues reminders on Sarvam."""
+"""Smart Khata: voice-first credit ledger + supplier bills + dues reminders on Sarvam."""
 import base64
 import csv
 import difflib
@@ -6,6 +6,8 @@ import io
 import json
 import os
 import re
+import secrets
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).parent
@@ -31,9 +33,32 @@ import db  # noqa: E402
 import sarvam  # noqa: E402
 
 SHOP_NAME = os.getenv("SHOP_NAME", "Sharma Kirana Store")
+APP_PASSWORD = os.getenv("APP_PASSWORD", "")
+WEBHOOK_TOKEN = os.getenv("WEBHOOK_TOKEN") or APP_PASSWORD
 
-app = FastAPI(title="Bolo Khata")
-db.init()
+app = FastAPI(title="Smart Khata")
+
+
+def _same(a: str, b: str) -> bool:
+    return secrets.compare_digest(a.encode(), b.encode())
+
+
+@app.middleware("http")
+async def require_password(request: Request, call_next):
+    """Shared-password gate so a public deploy doesn't expose the ledger or spend the Sarvam key."""
+    if APP_PASSWORD:
+        if request.url.path == "/api/webhooks/samvaad":  # Samvaad can't do Basic auth; use ?token=
+            if not _same(request.query_params.get("token", ""), WEBHOOK_TOKEN):
+                return Response(status_code=401)
+        else:
+            auth = request.headers.get("authorization", "")
+            try:
+                password = base64.b64decode(auth[6:]).decode().split(":", 1)[1] if auth[:6] == "Basic " else ""
+            except (ValueError, IndexError):
+                password = ""
+            if not _same(password, APP_PASSWORD):
+                return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="Smart Khata"'})
+    return await call_next(request)
 
 
 @app.exception_handler(sarvam.SarvamError)
@@ -203,11 +228,12 @@ def summary():
     bal = db.rows(db.BALANCES_SQL)
     payable = db.rows("SELECT COALESCE(SUM(total),0) AS t, COUNT(*) AS n FROM bills WHERE status='unpaid'")[0]
     today = db.rows("SELECT COALESCE(SUM(amount),0) AS t FROM entries "
-                    "WHERE kind='payment' AND date(created_at) = date('now')")[0]
+                    "WHERE kind='payment' AND substr(created_at, 1, 10) = ?",
+                    datetime.now(timezone.utc).strftime("%Y-%m-%d"))[0]  # timestamps are stored in UTC
     return {"receivable": sum(b["balance"] for b in bal if b["balance"] > 0),
             "debtors": sum(1 for b in bal if b["balance"] > 0),
             "payable": payable["t"], "unpaid_bills": payable["n"],
-            "collected_today": today["t"], "shop": SHOP_NAME}
+            "collected_today": today["t"], "shop": SHOP_NAME, "storage": db.STORAGE}
 
 
 class ProductIn(BaseModel):
@@ -293,12 +319,12 @@ async def upload_bill(file: UploadFile = File(...)):
         if any(p is not None for p in parts):
             bill["gst_amount"] = round(sum(p or 0 for p in parts), 2)
     with db.conn() as c:
-        bid = c.execute(
-            "INSERT INTO bills(supplier, bill_no, bill_date, total, gst, line_items, job_id) "
+        bid = db.insert(
+            c, "INSERT INTO bills(supplier, bill_no, bill_date, total, gst, line_items, job_id) "
             "VALUES (?,?,?,?,?,?,?)",
             (bill.get("supplier_name"), bill.get("bill_number"), bill.get("bill_date"),
              _num(bill.get("total_amount")), _num(bill.get("gst_amount")),
-             json.dumps(bill.get("line_items") or [], ensure_ascii=False), job["job_id"])).lastrowid
+             json.dumps(bill.get("line_items") or [], ensure_ascii=False), job["job_id"]))
     return {"id": bid, "extracted": bill, "job_status": job["status"]}
 
 
