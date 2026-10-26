@@ -182,15 +182,37 @@ class SaveIn(BaseModel):
 
 @app.post("/api/entries")
 def save_entries(body: SaveIn):
+    ids = []
     with db.conn() as c:
         for e in body.entries:
             if e.kind not in ("udhaar", "payment") or e.amount <= 0 or not e.customer.strip():
                 raise HTTPException(400, f"Invalid entry: {e}")
             cid = db.get_or_create_customer(c, e.customer)
-            c.execute("INSERT INTO entries(customer_id, kind, item, qty, unit, amount, transcript) "
-                      "VALUES (?,?,?,?,?,?,?)",
-                      (cid, e.kind, e.item, e.qty, e.unit, e.amount, body.transcript))
-    return {"saved": len(body.entries)}
+            ids.append(db.insert(c, "INSERT INTO entries(customer_id, kind, item, qty, unit, amount, transcript) "
+                                 "VALUES (?,?,?,?,?,?,?)",
+                                 (cid, e.kind, e.item, e.qty, e.unit, e.amount, body.transcript)))
+    return {"saved": len(ids), "ids": ids}
+
+
+@app.get("/api/activity")
+def activity(limit: int = 12):
+    return db.rows("SELECT e.*, cu.name FROM entries e JOIN customers cu ON cu.id = e.customer_id "
+                   "ORDER BY e.created_at DESC, e.id DESC LIMIT ?", min(max(limit, 1), 50))
+
+
+class SpeakIn(BaseModel):
+    text: str
+    lang: str = "hi-IN"
+
+
+@app.post("/api/speak")
+async def speak(body: SpeakIn):
+    """Bulbul read-back so the shopkeeper can confirm entries by ear."""
+    text = body.text.strip()[:500]
+    if not text:
+        raise HTTPException(400, "Nothing to speak")
+    wav = await sarvam.speak(text, body.lang if body.lang in REMINDER else "hi-IN")
+    return {"audio_b64": base64.b64encode(wav).decode()}
 
 
 @app.delete("/api/entries/{entry_id}")

@@ -64,7 +64,10 @@ def test_voice_to_ledger_flow():
     kesar["amount"] = 60
     namak["amount"] = 25
     r = client.post("/api/entries", json={"entries": res["entries"], "transcript": res["transcript"]})
-    assert r.json() == {"saved": 6}
+    assert r.json()["saved"] == 6 and len(r.json()["ids"]) == 6
+    feed = client.get("/api/activity?limit=3").json()
+    assert len(feed) == 3 and feed[0]["name"] in ("Ramesh", "Suresh")
+    assert client.post("/api/speak", json={"text": "Ramesh ko 90 rupaye"}).json()["audio_b64"]
 
     bal = {c["name"]: c for c in client.get("/api/customers").json()}
     assert bal["Ramesh"]["balance"] == 355 and bal["Suresh"]["balance"] == -500
