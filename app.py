@@ -230,10 +230,14 @@ def summary():
     today = db.rows("SELECT COALESCE(SUM(amount),0) AS t FROM entries "
                     "WHERE kind='payment' AND substr(created_at, 1, 10) = ?",
                     datetime.now(timezone.utc).strftime("%Y-%m-%d"))[0]  # timestamps are stored in UTC
-    return {"receivable": sum(b["balance"] for b in bal if b["balance"] > 0),
-            "debtors": sum(1 for b in bal if b["balance"] > 0),
-            "payable": payable["t"], "unpaid_bills": payable["n"],
-            "collected_today": today["t"], "shop": SHOP_NAME, "storage": db.STORAGE}
+    out = {"receivable": sum(b["balance"] for b in bal if b["balance"] > 0),
+           "debtors": sum(1 for b in bal if b["balance"] > 0),
+           "payable": payable["t"], "unpaid_bills": payable["n"],
+           "collected_today": today["t"], "shop": SHOP_NAME, "storage": db.STORAGE,
+           "version": os.getenv("VERCEL_GIT_COMMIT_SHA", "local")[:7]}
+    if db.STORAGE == "sqlite-ephemeral":
+        out["db_env_names"] = db.db_env_names()
+    return out
 
 
 class ProductIn(BaseModel):

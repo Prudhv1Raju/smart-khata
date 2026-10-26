@@ -11,11 +11,18 @@ def _database_url() -> str | None:
     for key, val in sorted(os.environ.items()):
         if key.endswith(("_DATABASE_URL", "_POSTGRES_URL")) and val.startswith(("postgres://", "postgresql://")):
             return val
+    if os.getenv("PGHOST"):
+        return ""  # libpq reads PGHOST/PGUSER/PGPASSWORD/PGDATABASE itself
     return None
 
 
+def db_env_names() -> list[str]:
+    """Names only (never values) of DB-looking env vars, to debug a missing connection."""
+    return sorted(k for k in os.environ if any(s in k.upper() for s in ("PG", "POSTGRES", "DATABASE", "NEON")))
+
+
 DATABASE_URL = _database_url()
-IS_PG = bool(DATABASE_URL)
+IS_PG = DATABASE_URL is not None
 # Vercel's filesystem is read-only except /tmp, and /tmp doesn't survive between instances.
 DB_PATH = os.getenv("KHATA_DB") or ("/tmp/khata.db" if os.getenv("VERCEL")
                                     else os.path.join(os.path.dirname(__file__), "khata.db"))
